@@ -10,10 +10,12 @@ import re
 import base64
 import webbrowser
 
-# --- Funciones para trabajar con la base de datos local ---
-def get_db_path():
-    # Definimos la ruta en el directorio de trabajo (en Railway será algo como /app/)
-    return os.path.join(os.getcwd(), "datos_consignacion.db")
+# ---------------------------
+# Funciones para manejo de la base de datos
+# ---------------------------
+def get_db_path(folder, filename="datos_consignacion.db"):
+    # Devuelve la ruta completa usando la carpeta indicada
+    return os.path.join(folder, filename)
 
 def connect_db(db_path):
     try:
@@ -50,56 +52,9 @@ def create_tables(conn):
     ''')
     conn.commit()
 
-# --- Sección para buscar o cargar la base de datos ---
-st.title("Gestión de Datos - Base de Datos Local")
-
-db_path = get_db_path()
-if st.button("BUSCA DATOS"):
-    if os.path.exists(db_path):
-        st.success(f"Base de datos encontrada en: {db_path}")
-    else:
-        st.error("No se encontró la base de datos en la ruta predeterminada.")
-        st.info("Sube el archivo 'datos_consignacion.db' para utilizarlo.")
-        uploaded_file = st.file_uploader("Sube 'datos_consignacion.db'")
-        if uploaded_file is not None:
-            with open(db_path, "wb") as f:
-                f.write(uploaded_file.getbuffer())
-            st.success("Base de datos cargada exitosamente!")
-    
-# Conectar (o crear) la base de datos; en Railway el archivo se creará en el directorio de trabajo
-conn = connect_db(db_path)
-if conn is not None:
-    create_tables(conn)
-
-# --- Estilos y JavaScript ---
-st.markdown("""
-    <style>
-    .stApp {
-        max-width: 1200px;
-        margin: auto;
-    }
-    input, textarea {
-        font-size: 1.1em;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-disable_enter_js = """
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-  const inputs = document.querySelectorAll('input');
-  inputs.forEach(input => {
-    input.addEventListener('keydown', function(e) {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-      }
-    });
-  });
-});
-</script>
-"""
-
-# --- Función de Scraping (Extraída y adaptada) ---
+# ---------------------------
+# Función de Scraping (Extraída y adaptada)
+# ---------------------------
 def scrape_vehicle_details(url):
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/98.0.4758.102 Safari/537.36',
@@ -194,7 +149,9 @@ def scrape_vehicle_details(url):
         "contact_image_file": contact_image_file
     }
 
-# --- Callback para actualizar los campos del auto ---
+# ---------------------------
+# Callback para actualizar los campos del auto
+# ---------------------------
 def update_auto_fields():
     url = st.session_state.link_auto  # Se usa el valor del campo fuera del formulario
     if url:
@@ -204,7 +161,84 @@ def update_auto_fields():
             st.session_state.precio_str = data['precio']
             st.session_state.descripcion_contacto = data['descripcion']
 
-# --- Navegación en Streamlit con botones verticales ---
+# ---------------------------
+# Interfaz para manejar la BBDD
+# ---------------------------
+st.title("Gestión de Base de Datos Local")
+
+# Permitir al usuario especificar la carpeta para la BBDD
+db_folder = st.text_input("Ingrese la ruta de la carpeta donde desea guardar la BBDD:", value=os.path.join(os.getcwd(), "db_files"))
+
+# Botones para crear o buscar la BBDD
+col1, col2 = st.columns(2)
+with col1:
+    if st.button("Crear BBDD"):
+        if not os.path.exists(db_folder):
+            os.makedirs(db_folder)
+        db_path = get_db_path(db_folder)
+        if os.path.exists(db_path):
+            st.warning(f"La base de datos ya existe en: {db_path}")
+        else:
+            conn_temp = sqlite3.connect(db_path, check_same_thread=False)
+            create_tables(conn_temp)
+            conn_temp.close()
+            st.success(f"Base de datos creada exitosamente en: {db_path}")
+
+with col2:
+    if st.button("Buscar BBDD"):
+        if os.path.exists(db_folder):
+            db_path = get_db_path(db_folder)
+            if os.path.exists(db_path):
+                st.success(f"Base de datos encontrada en: {db_path}")
+            else:
+                st.error("No se encontró la base de datos en la carpeta especificada.")
+                st.info("Sube el archivo 'datos_consignacion.db' para utilizarlo.")
+                uploaded_file = st.file_uploader("Sube 'datos_consignacion.db'", type=["db"])
+                if uploaded_file is not None:
+                    with open(db_path, "wb") as f:
+                        f.write(uploaded_file.getbuffer())
+                    st.success(f"Base de datos cargada exitosamente en: {db_path}")
+        else:
+            st.error("La carpeta especificada no existe. Intente crearla primero con 'Crear BBDD'.")
+
+# Conectar a la BBDD si existe
+db_path = get_db_path(db_folder)
+if os.path.exists(db_path):
+    conn = sqlite3.connect(db_path, check_same_thread=False)
+    create_tables(conn)
+else:
+    conn = None
+    st.info("No hay base de datos disponible. Use 'Crear BBDD' o 'Buscar BBDD' para comenzar.")
+
+# ---------------------------
+# Estilos y JavaScript
+# ---------------------------
+st.markdown("""
+    <style>
+    .stApp { max-width: 1200px; margin: auto; }
+    input, textarea { font-size: 1.1em; }
+    </style>
+    """, unsafe_allow_html=True)
+st.markdown("""
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const inputs = document.querySelectorAll('input');
+  inputs.forEach(input => {
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { e.preventDefault(); }
+    });
+  });
+});
+</script>
+""", unsafe_allow_html=True)
+
+# ---------------------------
+# Resto de la aplicación (Scraping y gestión de datos)
+# ---------------------------
+
+# ---------------------------
+# Navegación en la aplicación
+# ---------------------------
 if 'page' not in st.session_state:
     st.session_state.page = "Crear Link Contactos"
 
@@ -218,10 +252,11 @@ if st.sidebar.button("Ver Contactos & Exportar"):
 
 page = st.session_state.page
 
-# --- Página: Crear Link Contactos ---
+# ---------------------------
+# Página: Crear Link Contactos
+# ---------------------------
 if page == "Crear Link Contactos":
     st.title("Crear Link Contactos")
-    st.markdown(disable_enter_js, unsafe_allow_html=True)
     with st.form("crear_link_form"):
         link_general = st.text_input("Link General")
         fecha_creacion = st.date_input("Fecha de Creación", value=datetime.date.today())
@@ -240,11 +275,11 @@ if page == "Crear Link Contactos":
             conn.commit()
             st.success("Link Contactos creado exitosamente.")
 
-# --- Página: Agregar Contactos ---
+# ---------------------------
+# Página: Agregar Contactos
+# ---------------------------
 elif page == "Agregar Contactos":
     st.title("Agregar Contactos")
-    st.markdown(disable_enter_js, unsafe_allow_html=True)
-    
     df_links = pd.read_sql_query("SELECT * FROM links_contactos", conn)
     if df_links.empty:
         st.warning("No existen links. Por favor, crea un Link Contactos primero.")
@@ -257,10 +292,8 @@ elif page == "Agregar Contactos":
         st.markdown(f"**Fecha de Creación:** {selected_link['fecha_creacion']}")
         st.markdown(f"**Marca:** {selected_link['marca']}")
         st.markdown(f"**Descripción del Link:** {selected_link['descripcion']}")
-        
         link_id = selected_link["id"]
         
-        # --- Campo de Link del Auto fuera del formulario para activar el callback ---
         st.text_input("Link del Auto", key="link_auto", on_change=update_auto_fields)
         
         with st.form("agregar_contacto_form"):
@@ -293,7 +326,9 @@ elif page == "Agregar Contactos":
                 except sqlite3.IntegrityError:
                     st.error("El teléfono ya existe. Por favor, ingresa un número diferente.")
 
-# --- Página: Ver Contactos & Exportar ---
+# ---------------------------
+# Página: Ver Contactos & Exportar
+# ---------------------------
 elif page == "Ver Contactos & Exportar":
     st.title("Ver Contactos & Exportar")
     df_links = pd.read_sql_query("SELECT * FROM links_contactos", conn)

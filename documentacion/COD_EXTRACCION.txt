@@ -1,0 +1,116 @@
+import streamlit as st
+import requests
+from bs4 import BeautifulSoup
+import re
+import base64
+
+def scrape_vehicle_details(url):
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/98.0.4758.102 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'es-ES,es;q=0.9,en-US;q=0.8,en;q=0.7',
+        'Referer': 'https://www.chileautos.cl/'
+    }
+    
+    response = requests.get(url, headers=headers)
+    if response.status_code != 200:
+        st.error(f"Error al obtener la página: {response.status_code}")
+        return None
+
+    soup = BeautifulSoup(response.content, "html.parser")
+
+    # --- Extracción de la imagen de contacto ---
+    contact_img_tag = soup.find("img", src=lambda src: src and src.startswith("data:image"))
+    if contact_img_tag:
+        img_src = contact_img_tag.get("src", "")
+        if "base64," in img_src:
+            base64_data = img_src.split("base64,", 1)[1].strip()
+            base64_data = "".join(base64_data.split())
+            try:
+                image_bytes = base64.b64decode(base64_data)
+                with open("contact_image.png", "wb") as f:
+                    f.write(image_bytes)
+                contact_image_file = "contact_image.png"
+            except Exception as e:
+                st.error("Error al decodificar la imagen: " + str(e))
+                contact_image_file = "Error al decodificar"
+        else:
+            contact_image_file = "Formato de imagen no reconocido"
+    else:
+        contact_image_file = "No encontrado"
+
+    # --- Extracción de información del vehículo (nombre, año, precio) ---
+    nombre, anio, precio = None, None, None
+
+    vehiculo_elem = soup.find("div", class_="features-item-value-vehculo")
+    if vehiculo_elem:
+        texto_vehiculo = vehiculo_elem.get_text(strip=True)
+        partes = texto_vehiculo.split(" ", 1)
+        if partes and partes[0].isdigit() and len(partes[0]) == 4:
+            anio = partes[0]
+            nombre = partes[1] if len(partes) > 1 else ""
+        else:
+            nombre = texto_vehiculo
+
+    if not nombre:
+        h1_elem = soup.find("h1")
+        if h1_elem:
+            titulo_texto = h1_elem.get_text(strip=True)
+            partes = titulo_texto.split(" ", 1)
+            if partes and partes[0].isdigit() and len(partes[0]) == 4:
+                anio = partes[0]
+                nombre = partes[1] if len(partes) > 1 else titulo_texto
+            else:
+                nombre = titulo_texto
+
+    if anio:
+        nombre_completo = f"{anio} {nombre}"
+    else:
+        nombre_completo = nombre
+
+    # --- Extracción del precio ---
+    precio_elem = soup.find("div", class_="features-item-value-precio")
+    if precio_elem:
+        precio_texto = precio_elem.get_text(strip=True)
+        # Extraemos solo la parte numérica con comas sin el "$"
+        match = re.search(r"\$(\d{1,3}(?:,\d{3})+)", precio_texto)
+        if match:
+            precio = match.group(1)
+        else:
+            precio = precio_texto  # O algún valor por defecto si no coincide el patrón
+
+
+    # --- Extracción de la descripción ---
+    descripcion = None
+    descripcion_container = soup.find("div", class_="view-more-container")
+    if descripcion_container:
+        view_more_target = descripcion_container.find("div", class_="view-more-target")
+        if view_more_target:
+            p_elem = view_more_target.find("p")
+            if p_elem:
+                descripcion = p_elem.get_text(strip=True)
+    if not descripcion:
+        descripcion = "No disponible"
+
+    return {
+        "nombre": nombre_completo if nombre_completo else "No disponible",
+        "anio": anio if anio else "No disponible",
+        "precio": precio if precio else "No disponible",
+        "descripcion": descripcion,
+        "contact_image_file": contact_image_file
+    }
+
+# --- Interfaz de Streamlit ---
+st.title("Scraping de Detalles de Vehículo")
+url = st.text_input("Ingresa el URL del auto:")
+
+if st.button("Extraer datos"):
+    data = scrape_vehicle_details(url.strip())
+    if data:
+        st.subheader("Información Extraída:")
+        st.markdown(f"**Nombre del vehículo:** {data['nombre']}")
+        st.markdown(f"**Precio:** {data['precio']}")
+        st.markdown(f"**Descripción:** {data['descripcion']}")
+        st.markdown(f"**Imagen de contacto:** {data['contact_image_file']}")
+        if data["contact_image_file"] not in ["No encontrado", "Error al decodificar", "Formato de imagen no reconocido"]:
+            st.image(data["contact_image_file"], caption="Imagen de contacto")

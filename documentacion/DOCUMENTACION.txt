@@ -1,0 +1,106 @@
+# DATOS_CONSIGNACION
+
+## Descripción del Proyecto
+**DATOS_CONSIGNACION** es una aplicación en Python diseñada para facilitar la recolección, organización y exportación de datos de contactos relacionados con autos. La aplicación se centra en almacenar de forma estructurada la información extraída (ya sea manualmente o mediante scraping) de sitios web (por ejemplo, Chileautos) y agrupar dichos contactos según un link general. La interfaz se desarrolla utilizando Streamlit, lo que permite una gestión interactiva y dinámica de la información.
+
+## Objetivos
+- **Ingreso y Almacenamiento de Datos:**  
+  Permitir el registro y agrupación de datos de contactos asociados a un link general (por ejemplo, URL base de un sitio de autos) y guardar la información en una base de datos SQLite.
+  
+- **Validación de Información:**  
+  Evitar la duplicación de registros críticos (por ejemplo, número de teléfono) mediante validaciones en el ingreso de datos.
+  
+- **Visualización y Búsqueda:**  
+  Ofrecer herramientas interactivas (usando Streamlit) para filtrar y buscar contactos según criterios como nombre, modelo de auto, precio, etc.
+  
+- **Exportación de Datos:**  
+  Facilitar la exportación de registros (completos o filtrados) a archivos Excel mediante Pandas, para análisis y respaldo.
+
+## Funcionalidades Principales
+
+### 1. Interfaz y Registro de Datos
+- **Crear Link Contactos:**  
+  - **Formulario Inicial:** Permite al usuario ingresar información general del grupo de contactos, que incluye:
+    - **Link General:** URL base (ej., `https://www.chileautos.cl/...`).
+    - **Fecha de Creación:** Se establece por defecto a la fecha actual.
+    - **Marca:** Marca asociada al link.
+    - **Descripción:** Notas o información adicional sobre el grupo.
+    
+- **Agregar Contactos:**  
+  Una vez creado el Link Contactos, el usuario puede registrar datos individuales para cada contacto. Los campos incluyen:
+  - **Link del Auto:** URL específica de la ficha del auto.
+  - **Teléfono:** Número de contacto (con validación para evitar duplicados).
+  - **Nombre:** Nombre del contacto.
+  - **Auto:** Modelo o nombre del vehículo, que se completa automáticamente con el año.
+  - **Precio:** Precio del auto, formateado (por ejemplo, "16,990,000" sin el símbolo "$" ni moneda).
+  - **Descripción del Contacto:** Información adicional extraída o ingresada manualmente.
+
+- **Extracción Automática de Datos:**  
+  Se utiliza una función de scraping basada en Requests y BeautifulSoup para extraer automáticamente:
+  - La imagen de contacto (decodificada desde base64).
+  - Información del vehículo (nombre, año y precio).
+  - La descripción (extraída de un contenedor específico en la página).
+
+### 2. Gestión de Datos con SQLite
+- **Estructura de la Base de Datos:**
+  - **Tabla `links_contactos`:**  
+    Almacena la información general del grupo de contactos:
+    - `id` (clave primaria)
+    - `link_general` (URL base)
+    - `fecha_creacion` (fecha de creación)
+    - `marca` (marca asociada)
+    - `descripcion` (notas o descripción)
+    
+  - **Tabla `contactos`:**  
+    Guarda los datos específicos de cada contacto:
+    - `id` (clave primaria)
+    - `link_auto` (URL específica del auto)
+    - `telefono` (número de teléfono, único)
+    - `nombre` (nombre del contacto)
+    - `auto` (modelo/nombre del vehículo)
+    - `precio` (precio numérico)
+    - `descripcion` (descripción del contacto)
+    - `id_link` (clave foránea hacia `links_contactos`)
+
+### 3. Filtrado, Búsqueda y Exportación
+- **Filtros Dinámicos:**  
+  La aplicación utiliza componentes interactivos de Streamlit (como selectboxes y text inputs) para permitir al usuario filtrar los contactos registrados según diversos criterios.
+  
+- **Exportación a Excel:**  
+  Se emplea Pandas para convertir los datos consultados de SQLite en un DataFrame y exportarlos a un archivo Excel, que se puede descargar a través de un botón en la interfaz.
+
+## Datos Clave para Crear el Ejecutable
+
+Para generar un ejecutable autónomo de la aplicación (de manera que funcione en cualquier PC sin requerir que se instalen manualmente las dependencias), se deben considerar los siguientes puntos:
+
+1. **Empaquetado con PyInstaller o auto-py-to-exe:**
+   - Utiliza la opción `--onefile` para generar un único ejecutable.
+   - Si se prefiere que la consola no se muestre, usa `--windowed` (aunque para depuración se recomienda dejar la consola visible).
+   - Es crucial incluir todos los módulos y metadatos necesarios, usando por ejemplo:
+     ```
+     --collect-all streamlit --collect-all bs4
+     ```
+     Además, si tu aplicación está dividida en varios archivos (por ejemplo, un archivo `run.py` que llama a `str.py` o `app6.py`), asegúrate de incluir el archivo secundario como recurso:
+     - Emplea la opción `--add-data "str.py;."` (en Windows) o `--add-data "str.py:."` (en Linux/Mac).
+     - En el código de `run.py`, usa `sys._MEIPASS` para reconstruir la ruta al archivo secundario.
+
+2. **Versión de Python y Dependencias:**
+   - Es fundamental que empaquetes el ejecutable usando la misma versión de Python que se usará en la máquina destino. Esto evita conflictos con DLLs o binarios compilados.
+   - Revisa y actualiza tu archivo `requirements.txt` con todas las dependencias necesarias. Para generar o actualizar este archivo, activa un entorno virtual y ejecuta:
+     ```bash
+     pip freeze > requirements.txt
+     ```
+
+3. **Consideraciones del Sistema Destino:**
+   - Asegúrate de que la PC destino tenga instalados los componentes del sistema necesarios (por ejemplo, Microsoft Visual C++ Redistributable en Windows).
+   - El ejecutable es específico para la arquitectura del sistema (por ejemplo, 64 bits).
+
+## Ejemplo de Generación del Ejecutable
+
+Si tienes dos archivos:
+- **run.py:** Contiene la lógica para ejecutar la aplicación (invocando `streamlit run str.py` y utilizando `sys._MEIPASS` si se empaqueta en modo `--onefile`).
+- **str.py:** Contiene todo el código de la aplicación de Streamlit (el contenido del proyecto DATOS_CONSIGNACION).
+
+Podrías empaquetar con el siguiente comando en Windows:
+```bash
+pyinstaller --onefile --windowed --hidden-import=importlib_metadata --collect-all streamlit --collect-all bs4 --add-data "str.py;." run.py

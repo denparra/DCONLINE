@@ -1,0 +1,3 @@
+[build]
+# Comando personalizado para crear el entorno virtual sin la opción --copies
+command = "python -m venv /opt/venv && . /opt/venv/bin/activate && pip install --upgrade pip && pip install -r requirements.txt"
